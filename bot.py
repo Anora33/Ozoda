@@ -503,17 +503,6 @@ async def confirm_order(callback: types.CallbackQuery, state: FSMContext):
     await notify_drivers(order_id, data)
     await state.clear()
 
-        # Haydovchini band qilish
-        c.execute("UPDATE drivers SET is_available = 0 WHERE telegram_id = ?", (driver_id,))
-        conn.commit()
-    else:
-        await callback.message.edit_text(
-            "❌ Buyurtma allaqachon boshqa haydovchi tomonidan qabul qilingan!"
-        )
-
-    conn.close()
-
-
 @dp.callback_query(lambda c: c.data.startswith('reject_'))
 async def reject_order(callback: types.CallbackQuery):
     await callback.message.edit_text("❌ Buyurtma rad etildi")
