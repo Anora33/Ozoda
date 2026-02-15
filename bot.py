@@ -159,11 +159,8 @@ class OrderState(StatesGroup):
 # 4️⃣ NARX HISOBI
 # ============================================
 def calculate_price(from_addr, to_addr):
-    base_price = 15000
     distance = random.randint(3, 15)
-    price = base_price + (distance * 2000)
-    return price, distance
-
+    return distance
 
 # ============================================
 # 5️⃣ KLAVIATURALAR
@@ -475,10 +472,10 @@ async def confirm_order(callback: types.CallbackQuery, state: FSMContext):
     c = conn.cursor()
 
     c.execute('''INSERT INTO orders
-                 (user_id, user_name, user_phone, from_address, to_address, price, distance, status, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                 (user_id, user_name, user_phone, from_address, to_address, distance, status, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
               (user_id, data['user_name'], data['user_phone'], data['from_address'],
-               data['to_address'], data['price'], data['distance'], 'yangi', datetime.now()))
+               data['to_address'], data['distance'], 'yangi', datetime.now()))
     order_id = c.lastrowid
     conn.commit()
     conn.close()
@@ -488,7 +485,7 @@ async def confirm_order(callback: types.CallbackQuery, state: FSMContext):
         f"🆔 Buyurtma raqami: <b>{order_id}</b>\n"
         f"👤 {data['user_name']}\n"
         f"📍 {data['from_address']} → {data['to_address']}\n"
-        f"💰 Narx: {data['price']} so'm\n\n"
+        f"📏 Masofa: {data['distance']} km\n\n"              # <-- O'ZGARTIRILDI
         f"⏳ <b>Haydovchi qidirilmoqda...</b>\n"
         f"Tez orada siz bilan bog'lanamiz!"
     )
