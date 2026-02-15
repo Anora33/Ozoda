@@ -442,7 +442,7 @@ async def order_to(message: types.Message, state: FSMContext):
     await state.update_data(to_address=message.text)
     data = await state.get_data()
 
-    price, distance = calculate_price(data['from_address'], data['to_address'])
+    distance = calculate_price(data['from_address'], data['to_address'])
     await state.update_data(price=price, distance=distance)
 
     await message.answer(
