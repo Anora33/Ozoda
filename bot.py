@@ -502,55 +502,8 @@ async def confirm_order(callback: types.CallbackQuery, state: FSMContext):
     
     await notify_drivers(order_id, data)
     await state.clear()
-# ============================================
-# 1️⃣2️⃣ HAYDOVCHI BUYURTMA QABUL QILISH
-# ============================================
-@dp.callback_query(lambda c: c.data.startswith('accept_'))
-async def accept_order(callback: types.CallbackQuery):
-    order_id = callback.data.split('_')[1]
-    driver_id = callback.from_user.id
 
-    conn = sqlite3.connect('taxi_bot.db')
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM drivers WHERE telegram_id = ?", (driver_id,))
-    driver = c.fetchone()
-
-    c.execute('''UPDATE orders
-                 SET driver_id   = ?,
-                     status      = 'qabul_qilindi',
-                     accepted_at = ?
-                 WHERE order_id = ?
-                   AND status = 'yangi' ''',
-              (driver_id, datetime.now(), order_id))
-
-    if c.rowcount > 0:
-        c.execute('''SELECT user_id, user_name, user_phone, from_address, to_address, price
-                     FROM orders
-                     WHERE order_id = ?''', (order_id,))
-        order = c.fetchone()
-
-        conn.commit()
-
-        await bot.send_message(
-            order[0],
-            f"✅ <b>HAYDOVCHI TOPILDI!</b>\n\n"
-            f"🆔 Buyurtma: #{order_id}\n\n"
-            f"🚖 <b>Haydovchi ma'lumotlari:</b>\n"
-            f"👤 {driver[2]}\n"
-            f"📞 {driver[3]}\n"
-            f"🚗 {driver[4]} ({driver[5]})\n"
-            f"⭐ Reyting: {driver[6]}\n\n"
-            f"📍 {order[3]} → {order[4]}\n"
-            f"💰 {order[5]} so'm\n\n"
-            f"⏳ <b>Tez orada haydovchi siz bilan bog'lanadi!</b>"
-        )
-
-        await callback.message.edit_text(
-            f"✅ Buyurtma #{order_id} qabul qilindi!\n"
-            f"Mijozga xabar yuborildi."
-        )
-
+        # Haydovchini band qilish
         c.execute("UPDATE drivers SET is_available = 0 WHERE telegram_id = ?", (driver_id,))
         conn.commit()
     else:
