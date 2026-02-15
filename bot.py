@@ -494,39 +494,51 @@ async def confirm_order(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
 
 
-@dp.callback_query(lambda c: c.data == "cancel")
-async def cancel_order(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.edit_text("❌ Buyurtma bekor qilindi!")
-    await state.clear()
-
-
-# ============================================
-# 1️⃣1️⃣ HAYDOVCHILARGA XABAR YUBORISH
-# ============================================
-async def notify_drivers(order_id, order_data):
+@dp.callback_query(lambda c: c.data == "confirm")
+async def confirm_order(callback: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    user_id = callback.from_user.id
+    
+    # DATA NI TEKSHIRISH
+    print(f"DATA: {data}")  # Bu loglarda ko'rinadi
+    
+    required_keys = ['user_name', 'user_phone', 'from_address', 'to_address', 'distance']
+    missing_keys = [key for key in required_keys if key not in data]
+    
+    if missing_keys:
+        await callback.message.edit_text(
+            f"❌ Xatolik! Ma'lumotlar to'liq emas:\n"
+            f"Yo'qotilgan ma'lumotlar: {', '.join(missing_keys)}\n\n"
+            f"Qaytadan /order bosing."
+        )
+        await state.clear()
+        return
+    
+    # QOLGAN KOD (SIZNING INSERT)
     conn = sqlite3.connect('taxi_bot.db')
     c = conn.cursor()
-    c.execute("SELECT telegram_id FROM drivers WHERE is_available = 1")
-    drivers = c.fetchall()
+    
+    c.execute('''INSERT INTO orders
+                 (user_id, user_name, user_phone, from_address, to_address, distance, status, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+              (user_id, data['user_name'], data['user_phone'], data['from_address'],
+               data['to_address'], data['distance'], 'yangi', datetime.now()))
+    order_id = c.lastrowid
+    conn.commit()
     conn.close()
-
-    for driver in drivers:
-        try:
-            await bot.send_message(
-                driver[0],
-                f"🚖 <b>YANGI BUYURTMA! #{order_id}</b>\n\n"
-                f"👤 <b>Mijoz:</b> {order_data['user_name']}\n"
-                f"📍 <b>Qayerdan:</b> {order_data['from_address']}\n"
-                f"🏁 <b>Qayerga:</b> {order_data['to_address']}\n"
-                f"📏 <b>Masofa:</b> {order_data['distance']} km\n"
-                f"💰 <b>Narx:</b> {order_data['price']} so'm\n\n"
-                f"Buyurtmani qabul qilasizmi?",
-                reply_markup=accept_order_kb(order_id)
-            )
-        except:
-            continue
-
-
+    
+    await callback.message.edit_text(
+        f"✅ <b>BUYURTMA QABUL QILINDI!</b>\n\n"
+        f"🆔 Buyurtma raqami: <b>{order_id}</b>\n"
+        f"👤 {data['user_name']}\n"
+        f"📍 {data['from_address']} → {data['to_address']}\n"
+        f"📏 Masofa: {data['distance']} km\n\n"
+        f"⏳ <b>Haydovchi qidirilmoqda...</b>\n"
+        f"Tez orada siz bilan bog'lanamiz!"
+    )
+    
+    await notify_drivers(order_id, data)
+    await state.clear()
 # ============================================
 # 1️⃣2️⃣ HAYDOVCHI BUYURTMA QABUL QILISH
 # ============================================
