@@ -467,54 +467,20 @@ async def order_to(message: types.Message, state: FSMContext):
 async def confirm_order(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     user_id = callback.from_user.id
-
-    conn = sqlite3.connect('taxi_bot.db')
-    c = conn.cursor()
-
-    c.execute('''INSERT INTO orders
-                 (user_id, user_name, user_phone, from_address, to_address, distance, status, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
-              (user_id, data['user_name'], data['user_phone'], data['from_address'],
-               data['to_address'], data['distance'], 'yangi', datetime.now()))
-    order_id = c.lastrowid
-    conn.commit()
-    conn.close()
-
-    await callback.message.edit_text(
-        f"✅ <b>BUYURTMA QABUL QILINDI!</b>\n\n"
-        f"🆔 Buyurtma raqami: <b>{order_id}</b>\n"
-        f"👤 {data['user_name']}\n"
-        f"📍 {data['from_address']} → {data['to_address']}\n"
-        f"📏 Masofa: {data['distance']} km\n\n"              # <-- O'ZGARTIRILDI
-        f"⏳ <b>Haydovchi qidirilmoqda...</b>\n"
-        f"Tez orada siz bilan bog'lanamiz!"
-    )
-
-    await notify_drivers(order_id, data)
-    await state.clear()
-
-
-@dp.callback_query(lambda c: c.data == "confirm")
-async def confirm_order(callback: types.CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    user_id = callback.from_user.id
     
     # DATA NI TEKSHIRISH
-    print(f"DATA: {data}")  # Bu loglarda ko'rinadi
-    
     required_keys = ['user_name', 'user_phone', 'from_address', 'to_address', 'distance']
     missing_keys = [key for key in required_keys if key not in data]
     
     if missing_keys:
         await callback.message.edit_text(
-            f"❌ Xatolik! Ma'lumotlar to'liq emas:\n"
-            f"Yo'qotilgan ma'lumotlar: {', '.join(missing_keys)}\n\n"
-            f"Qaytadan /order bosing."
+            f"❌ Xatolik! Ma'lumotlar to'liq emas.\n"
+            f"Yo'qotilgan: {', '.join(missing_keys)}\n\n"
+            f"Iltimos, /order buyrug'ini qaytadan bosing."
         )
         await state.clear()
         return
     
-    # QOLGAN KOD (SIZNING INSERT)
     conn = sqlite3.connect('taxi_bot.db')
     c = conn.cursor()
     
