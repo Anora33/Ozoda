@@ -430,36 +430,33 @@ async def order_from(message: types.Message, state: FSMContext):
         reply_markup=cancel_kb(),
         parse_mode="HTML"
     )
-
-
 @dp.message(OrderState.to_address)
 async def order_to(message: types.Message, state: FSMContext):
     if message.text == "❌ Bekor qilish":
         await state.clear()
         await message.answer("❌ Buyurtma bekor qilindi!", reply_markup=main_menu())
         return
-
+    
     await state.update_data(to_address=message.text)
     data = await state.get_data()
-
-    distance = calculate_price(data['from_address'], data['to_address'])
-    await state.update_data(price=price, distance=distance)
-
+    
+    # BU QATOR TO'G'RI BOLISHI KERAK:
+    distance = calculate_price(data['from_address'], data['to_address'])  # <-- FAQAT distance
+    
+    await state.update_data(distance=distance)
+    
     await message.answer(
         f"🚖 <b>BUYURTMA MA'LUMOTLARI</b>\n\n"
         f"👤 <b>Ism:</b> {data['user_name']}\n"
         f"📞 <b>Telefon:</b> {data['user_phone']}\n"
         f"📍 <b>Qayerdan:</b> {data['from_address']}\n"
         f"🏁 <b>Qayerga:</b> {data['to_address']}\n"
-        f"📏 <b>Masofa:</b> {distance} km\n"
-        f"💰 <b>Narx:</b> {price} so'm\n\n"
+        f"📏 <b>Masofa:</b> {distance} km\n\n"
         f"Buyurtmani tasdiqlaysizmi?",
         reply_markup=confirm_order_kb(),
         parse_mode="HTML"
     )
     await state.set_state(OrderState.confirm)
-
-
 # ============================================
 # 🔟 BUYURTMA TASDIQLASH
 # ============================================
@@ -685,7 +682,6 @@ async def my_orders(message: types.Message):
         }
         text += f"{status_emoji.get(order[9], '⏳')} <b>#{order[0]}</b>\n"
         text += f"📍 {order[5]} → {order[6]}\n"
-        text += f"💰 {order[7]} so'm\n"
         text += f"📏 {order[8]} km\n"
         text += f"🕐 {order[10][:16]}\n\n"
 
