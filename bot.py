@@ -13,7 +13,7 @@ import random
 # ============================================
 # 1️⃣ BOT TOKENI
 # ============================================
-TOKEN = "8582862021:AAG2AybkC2Dg4K-gBLpHUgrfJu1OkBxog2w"
+TOKEN = ""
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
