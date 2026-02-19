@@ -1,787 +1,814 @@
 import asyncio
 import logging
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+import os
+import warnings
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.storage.memory import MemoryStorage
-from datetime import datetime
-import sqlite3
-import random
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from dotenv import load_dotenv
+import aiosqlite
 
-# ============================================
-# 1️⃣ BOT TOKENI
-# ============================================
-TOKEN = "8582862021:AAG2AybkC2Dg4K-gBLpHUgrfJu1OkBxog2w"
-
+# Ogohlantirishlarni o'chirish
+warnings.filterwarnings("ignore", category=UserWarning)
 logging.basicConfig(level=logging.INFO)
-bot = Bot(token=TOKEN)
-storage = MemoryStorage()
-dp = Dispatcher(storage=storage)
+
+# .env faylni yuklash
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
+
+# Bot va Dispatcher
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
 
 
-# ============================================
-# 2️⃣ MA'LUMOTLAR BAZASI
-# ============================================
-def init_db():
-    conn = sqlite3.connect('taxi_bot.db')
-    c = conn.cursor()
+# ==================== MA'LUMOTLAR BAZASI ====================
 
-    # Mijozlar
-    c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (
-                     user_id
-                     INTEGER
-                     PRIMARY
-                     KEY,
-                     name
-                     TEXT,
-                     phone
-                     TEXT,
-                     created_at
-                     TIMESTAMP
-                 )''')
+async def init_db():
+    async with aiosqlite.connect("taxi_bot.db") as db:
+        # Eski jadvallarni o'chirish
+        try:
+            await db.execute("DROP TABLE IF EXISTS drivers")
+            await db.execute("DROP TABLE IF EXISTS orders")
+            print("✅ Eski jadvallar o'chirildi")
+        except:
+            pass
 
-    # Haydovchilar
-    c.execute('''CREATE TABLE IF NOT EXISTS drivers
-                 (
-                     driver_id
-                     INTEGER
-                     PRIMARY
-                     KEY
-                     AUTOINCREMENT,
-                     telegram_id
-                     INTEGER
-                     UNIQUE,
-                     full_name
-                     TEXT,
-                     phone
-                     TEXT,
-                     car_model
-                     TEXT,
-                     car_number
-                     TEXT,
-                     rating
-                     REAL
-                     DEFAULT
-                     5.0,
-                     is_available
-                     BOOLEAN
-                     DEFAULT
-                     1,
-                     total_trips
-                     INTEGER
-                     DEFAULT
-                     0,
-                     created_at
-                     TIMESTAMP
-                 )''')
+        # drivers jadvali
+        await db.execute("""
+                         CREATE TABLE IF NOT EXISTS drivers
+                         (
+                             id
+                             INTEGER
+                             PRIMARY
+                             KEY
+                             AUTOINCREMENT,
+                             user_id
+                             INTEGER
+                             UNIQUE,
+                             full_name
+                             TEXT,
+                             phone
+                             TEXT,
+                             car_model
+                             TEXT,
+                             car_number
+                             TEXT,
+                             car_color
+                             TEXT,
+                             license_photo
+                             TEXT,
+                             status
+                             TEXT
+                             DEFAULT
+                             'pending',
+                             registered_at
+                             TIMESTAMP
+                             DEFAULT
+                             CURRENT_TIMESTAMP
+                         )
+                         """)
 
-    # Buyurtmalar
-    c.execute('''CREATE TABLE IF NOT EXISTS orders
-    (
-        order_id
-        INTEGER
-        PRIMARY
-        KEY
-        AUTOINCREMENT,
-        user_id
-        INTEGER,
-        driver_id
-        INTEGER
-        DEFAULT
-        NULL,
-        user_name
-        TEXT,
-        user_phone
-        TEXT,
-        from_address
-        TEXT,
-        to_address
-        TEXT,
-        price
-        INTEGER,
-        distance
-        REAL,
-        status
-        TEXT
-        DEFAULT
-        'yangi',
-        created_at
-        TIMESTAMP,
-        accepted_at
-        TIMESTAMP,
-        completed_at
-        TIMESTAMP,
-        FOREIGN
-        KEY
-                 (
-        user_id
-                 ) REFERENCES users
-                 (
-                     user_id
-                 ),
-        FOREIGN KEY
-                 (
-                     driver_id
-                 ) REFERENCES drivers
-                 (
-                     driver_id
-                 ))''')
-
-    conn.commit()
-    conn.close()
+        # orders jadvali - narxsiz
+        await db.execute("""
+                         CREATE TABLE IF NOT EXISTS orders
+                         (
+                             id
+                             INTEGER
+                             PRIMARY
+                             KEY
+                             AUTOINCREMENT,
+                             user_id
+                             INTEGER,
+                             user_name
+                             TEXT,
+                             user_phone
+                             TEXT,
+                             driver_id
+                             INTEGER
+                             DEFAULT
+                             NULL,
+                             start_location
+                             TEXT,
+                             end_location
+                             TEXT,
+                             latitude
+                             REAL
+                             DEFAULT
+                             NULL,
+                             longitude
+                             REAL
+                             DEFAULT
+                             NULL,
+                             status
+                             TEXT
+                             DEFAULT
+                             'pending',
+                             created_at
+                             TIMESTAMP
+                             DEFAULT
+                             CURRENT_TIMESTAMP
+                         )
+                         """)
+        await db.commit()
+        print("✅ Yangi database yaratildi!")
 
 
-init_db()
+async def add_driver(user_id, full_name, phone, car_model, car_number, car_color, license_photo):
+    async with aiosqlite.connect("taxi_bot.db") as db:
+        try:
+            await db.execute("""
+                             INSERT INTO drivers (user_id, full_name, phone, car_model, car_number, car_color,
+                                                  license_photo, status)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                             """,
+                             (user_id, full_name, phone, car_model, car_number, car_color, license_photo, 'pending'))
+            await db.commit()
+            return True
+        except Exception as e:
+            print(f"Xatolik: {e}")
+            return False
 
 
-# ============================================
-# 3️⃣ HOLATLAR (FSM)
-# ============================================
-class RegisterState(StatesGroup):
-    name = State()
-    phone = State()
-    car_model = State()
-    car_number = State()
+async def get_approved_drivers_count():
+    async with aiosqlite.connect("taxi_bot.db") as db:
+        try:
+            cursor = await db.execute("SELECT COUNT(*) FROM drivers WHERE status = 'approved'")
+            result = await cursor.fetchone()
+            return result[0] if result else 0
+        except:
+            return 0
 
 
-class OrderState(StatesGroup):
-    user_name = State()
-    user_phone = State()
-    from_address = State()
-    to_address = State()
-    confirm = State()
+async def get_pending_drivers():
+    async with aiosqlite.connect("taxi_bot.db") as db:
+        try:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM drivers WHERE status = 'pending'")
+            return await cursor.fetchall()
+        except:
+            return []
 
 
-# ============================================
-# 4️⃣ NARX HISOBI
-# ============================================
-def calculate_price(from_addr, to_addr):
-    base_price = 15000
-    distance = random.randint(3, 15)
-    price = base_price + (distance * 2000)
-    return price, distance
+async def get_driver_by_user_id(user_id):
+    async with aiosqlite.connect("taxi_bot.db") as db:
+        try:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM drivers WHERE user_id = ?", (user_id,))
+            return await cursor.fetchone()
+        except:
+            return None
 
 
-# ============================================
-# 5️⃣ KLAVIATURALAR
-# ============================================
-def main_menu():
+async def add_order(user_id, user_name, user_phone, start_location, end_location, latitude=None, longitude=None):
+    async with aiosqlite.connect("taxi_bot.db") as db:
+        cursor = await db.execute("""
+                                  INSERT INTO orders (user_id, user_name, user_phone, start_location, end_location,
+                                                      latitude, longitude)
+                                  VALUES (?, ?, ?, ?, ?, ?, ?)
+                                  """,
+                                  (user_id, user_name, user_phone, start_location, end_location, latitude, longitude))
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def update_driver_status(driver_id, status):
+    async with aiosqlite.connect("taxi_bot.db") as db:
+        await db.execute("UPDATE drivers SET status = ? WHERE id = ?", (status, driver_id))
+        await db.commit()
+
+
+async def get_all_approved_drivers():
+    async with aiosqlite.connect("taxi_bot.db") as db:
+        try:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM drivers WHERE status = 'approved'")
+            return await cursor.fetchall()
+        except:
+            return []
+
+
+# ==================== TEST HAYDOVCHI YARATISH ====================
+
+async def create_test_driver():
+    """Test uchun haydovchi yaratish"""
+    async with aiosqlite.connect("taxi_bot.db") as db:
+        # Test haydovchi mavjudligini tekshirish
+        cursor = await db.execute("SELECT COUNT(*) FROM drivers WHERE user_id = ?", (ADMIN_ID,))
+        count = await cursor.fetchone()
+
+        if count[0] == 0:
+            # Test haydovchi yaratish
+            await db.execute("""
+                             INSERT INTO drivers (user_id, full_name, phone, car_model, car_number, car_color,
+                                                  license_photo, status)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                             """, (ADMIN_ID, "Test Haydovchi", "+998901234567", "Test Car", "01A123AA", "Qora",
+                                   "test_photo_id", "approved"))
+            await db.commit()
+            print("✅ Test haydovchi yaratildi!")
+        else:
+            print("✅ Test haydovchi allaqachon mavjud")
+
+
+# ==================== HOLATLAR (FSM) ====================
+
+class DriverRegistration(StatesGroup):
+    waiting_for_name = State()
+    waiting_for_phone = State()
+    waiting_for_car_model = State()
+    waiting_for_car_number = State()
+    waiting_for_car_color = State()
+    waiting_for_license_photo = State()
+
+
+class TaxiOrder(StatesGroup):
+    waiting_for_phone = State()
+    waiting_for_start_location = State()
+    waiting_for_end_location = State()
+    waiting_for_confirmation = State()
+
+
+# ==================== TUGMALAR ====================
+
+def get_main_keyboard():
     kb = [
-        [KeyboardButton(text="🚖 Buyurtma berish")],
-        [KeyboardButton(text="📋 Mening buyurtmalarim"), KeyboardButton(text="🚗 Haydovchi menyusi")],
-        [KeyboardButton(text="📞 Aloqa"), KeyboardButton(text="⚙️ Yordam")]
+        [KeyboardButton(text="🚖 Taksi chaqirish")],
+        [KeyboardButton(text="👨‍✈️ Haydovchi bo'lish"), KeyboardButton(text="👤 Profilim")],
+        [KeyboardButton(text="📞 Aloqa"), KeyboardButton(text="ℹ️ Yordam")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 
-def driver_menu():
+def get_driver_keyboard():
     kb = [
-        [KeyboardButton(text="✅ Yangi buyurtmalar"), KeyboardButton(text="📊 Mening statistika")],
-        [KeyboardButton(text="🔄 Holatni o'zgartirish"), KeyboardButton(text="🔙 Asosiy menyu")]
+        [KeyboardButton(text="📝 Ro'yxatdan o'tish")],
+        [KeyboardButton(text="📊 Mening statistika")],
+        [KeyboardButton(text="🔙 Bosh menyu")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 
-def phone_kb():
+def get_admin_keyboard(driver_id):
+    kb = [
+        [InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"approve_{driver_id}")],
+        [InlineKeyboardButton(text="❌ Rad etish", callback_data=f"reject_{driver_id}")]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+def get_confirmation_keyboard():
+    kb = [
+        [InlineKeyboardButton(text="✅ Tasdiqlash", callback_data="confirm_order")],
+        [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_order")]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+def get_location_keyboard():
+    kb = [
+        [KeyboardButton(text="📍 Lokatsiya yuborish", request_location=True)],
+        [KeyboardButton(text="🔙 Bosh menyu")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+
+def get_contact_keyboard():
     kb = [
         [KeyboardButton(text="📱 Telefon raqamni yuborish", request_contact=True)],
-        [KeyboardButton(text="🔙 Orqaga")]
+        [KeyboardButton(text="🔙 Bosh menyu")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 
-def cancel_kb():
-    kb = [[KeyboardButton(text="❌ Bekor qilish")]]
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+# ==================== HANDLERLAR ====================
 
-
-def confirm_order_kb():
-    kb = [
-        [InlineKeyboardButton(text="✅ Tasdiqlash", callback_data="confirm")],
-        [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel")]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=kb)
-
-
-def accept_order_kb(order_id):
-    kb = [
-        [InlineKeyboardButton(text="✅ Qabul qilish", callback_data=f"accept_{order_id}")],
-        [InlineKeyboardButton(text="❌ Rad etish", callback_data=f"reject_{order_id}")]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=kb)
-
-
-# ============================================
-# 6️⃣ START
-# ============================================
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    user_id = message.from_user.id
-    user_name = message.from_user.first_name
-
-    conn = sqlite3.connect('taxi_bot.db')
-    c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO users (user_id, name, created_at) VALUES (?, ?, ?)",
-              (user_id, user_name, datetime.now()))
-    conn.commit()
-    conn.close()
-
     await message.answer(
-        f"🚖 <b>XUSH KELIBSIZ, {user_name}!</b>\n\n"
-        f"Bu Taksi24 bot orqali:\n"
-        f"✅ Taksi buyurtma qilishingiz mumkin\n"
-        f"✅ Haydovchi sifatida ro'yxatdan o'tishingiz mumkin\n"
-        f"✅ Narxlarni oldindan bilib olishingiz mumkin\n\n"
-        f"<b>Pastdagi tugmalardan birini tanlang:</b>",
-        reply_markup=main_menu(),
-        parse_mode="HTML"
+        f"Assalomu alaykum, {message.from_user.first_name}! 👋\n\n"
+        "🚖 **Taksi Bot**ga xush kelibsiz!\n\n"
+        "Quyidagi tugmalardan birini tanlang:",
+        reply_markup=get_main_keyboard(),
+        parse_mode="Markdown"
     )
 
 
-# ============================================
-# 7️⃣ HAYDOVCHI MENYUSI
-# ============================================
-@dp.message(lambda message: message.text == "🚗 Haydovchi menyusi")
-async def driver_menu_handler(message: types.Message):
-    conn = sqlite3.connect('taxi_bot.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM drivers WHERE telegram_id = ?", (message.from_user.id,))
-    driver = c.fetchone()
-    conn.close()
+# ==================== TAKSI CHAQIRISH ====================
+
+@dp.message(F.text == "🚖 Taksi chaqirish")
+async def process_order_start(message: types.Message, state: FSMContext):
+    drivers_count = await get_approved_drivers_count()
+    if drivers_count == 0:
+        await message.answer(
+            "⚠️ **Hozircha haydovchilar yo'q!**\n\n"
+            "Birozdan keyin urinib ko'ring.",
+            parse_mode="Markdown"
+        )
+        return
+
+    # Foydalanuvchi ma'lumotlarini avtomatik olish
+    user_name = message.from_user.full_name
+
+    await state.update_data(user_name=user_name)
+    await message.answer(
+        f"👋 Assalomu alaykum, {user_name}!\n\n"
+        f"Iltimos, telefon raqamingizni yuboring yoki quyidagi tugma orqali ulashing:",
+        reply_markup=get_contact_keyboard()
+    )
+    await state.set_state(TaxiOrder.waiting_for_phone)
+
+
+@dp.message(TaxiOrder.waiting_for_phone, F.contact)
+async def process_order_phone_contact(message: types.Message, state: FSMContext):
+    # Kontaktdan telefon raqamni olish
+    phone = message.contact.phone_number
+    await state.update_data(user_phone=phone)
+    await message.answer(
+        "📍 Ketish manzilingizni yuboring (lokatsiya yoki matn):",
+        reply_markup=get_location_keyboard()
+    )
+    await state.set_state(TaxiOrder.waiting_for_start_location)
+
+
+@dp.message(TaxiOrder.waiting_for_phone, F.text)
+async def process_order_phone_text(message: types.Message, state: FSMContext):
+    # Qo'lda kiritilgan telefon raqam
+    if message.text == "🔙 Bosh menyu":
+        await state.clear()
+        await message.answer("Bosh menyu", reply_markup=get_main_keyboard())
+        return
+
+    await state.update_data(user_phone=message.text)
+    await message.answer(
+        "📍 Ketish manzilingizni yuboring (lokatsiya yoki matn):",
+        reply_markup=get_location_keyboard()
+    )
+    await state.set_state(TaxiOrder.waiting_for_start_location)
+
+
+@dp.message(TaxiOrder.waiting_for_start_location, F.location)
+async def process_start_location_location(message: types.Message, state: FSMContext):
+    location = message.location
+    await state.update_data(
+        start_location=f"Lokatsiya: {location.latitude}, {location.longitude}",
+        latitude=location.latitude,
+        longitude=location.longitude
+    )
+    await message.answer(
+        "🏁 Borish manzilingizni yozing:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="🔙 Bosh menyu")]],
+            resize_keyboard=True
+        )
+    )
+    await state.set_state(TaxiOrder.waiting_for_end_location)
+
+
+@dp.message(TaxiOrder.waiting_for_start_location, F.text)
+async def process_start_location_text(message: types.Message, state: FSMContext):
+    if message.text == "🔙 Bosh menyu":
+        await state.clear()
+        await message.answer("Bosh menyu", reply_markup=get_main_keyboard())
+        return
+
+    await state.update_data(start_location=message.text, latitude=None, longitude=None)
+    await message.answer(
+        "🏁 Borish manzilingizni yozing:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="🔙 Bosh menyu")]],
+            resize_keyboard=True
+        )
+    )
+    await state.set_state(TaxiOrder.waiting_for_end_location)
+
+
+@dp.message(TaxiOrder.waiting_for_end_location)
+async def process_end_location(message: types.Message, state: FSMContext):
+    if message.text == "🔙 Bosh menyu":
+        await state.clear()
+        await message.answer("Bosh menyu", reply_markup=get_main_keyboard())
+        return
+
+    data = await state.get_data()
+    await state.update_data(end_location=message.text)
+
+    text = (
+        f"🚖 **Buyurtma ma'lumotlari:**\n\n"
+        f"👤 Ism: {data.get('user_name')}\n"
+        f"📞 Telefon: {data.get('user_phone')}\n"
+        f"📍 Ketish: {data.get('start_location')}\n"
+        f"🏁 Borish: {message.text}\n\n"
+        f"✅ Buyurtmani tasdiqlaysizmi?"
+    )
+
+    await message.answer(text, reply_markup=get_confirmation_keyboard(), parse_mode="Markdown")
+    await state.set_state(TaxiOrder.waiting_for_confirmation)
+
+
+@dp.callback_query(TaxiOrder.waiting_for_confirmation, F.data == "confirm_order")
+async def confirm_order(callback: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+
+    order_id = await add_order(
+        user_id=callback.from_user.id,
+        user_name=data['user_name'],
+        user_phone=data['user_phone'],
+        start_location=data['start_location'],
+        end_location=data['end_location'],
+        latitude=data.get('latitude'),
+        longitude=data.get('longitude')
+    )
+
+    await callback.message.edit_text(
+        f"✅ **Buyurtmangiz qabul qilindi!**\n\n"
+        f"Buyurtma raqami: #{order_id}\n"
+        f"Tez orada haydovchi siz bilan bog'lanadi.",
+        parse_mode="Markdown"
+    )
+
+    # Barcha tasdiqlangan haydovchilarga buyurtmani yuborish
+    drivers = await get_all_approved_drivers()
+    for driver in drivers:
+        try:
+            location_text = ""
+            if data.get('latitude') and data.get('longitude'):
+                location_text = f"https://maps.google.com/?q={data['latitude']},{data['longitude']}"
+
+            await bot.send_message(
+                driver['user_id'],
+                f"🚖 **Yangi buyurtma!**\n\n"
+                f"👤 Mijoz: {data['user_name']}\n"
+                f"📞 Telefon: {data['user_phone']}\n"
+                f"📍 Ketish: {data['start_location']}\n"
+                f"{location_text}\n"
+                f"🏁 Borish: {data['end_location']}\n\n"
+                f"Buyurtma raqami: #{order_id}",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            print(f"Haydovchiga xabar yuborishda xatolik: {e}")
+            continue
+
+    await state.clear()
+
+
+@dp.callback_query(TaxiOrder.waiting_for_confirmation, F.data == "cancel_order")
+async def cancel_order(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.edit_text("❌ Buyurtma bekor qilindi.")
+    await callback.message.answer("Bosh menyu", reply_markup=get_main_keyboard())
+    await state.clear()
+
+
+# ==================== HAYDOVCHI BO'LISH ====================
+
+@dp.message(F.text == "👨‍✈️ Haydovchi bo'lish")
+async def driver_menu(message: types.Message):
+    driver = await get_driver_by_user_id(message.from_user.id)
 
     if driver:
-        status_text = "✅ Bo'sh" if driver[7] else "⏳ Band"
+        status_text = {
+            'pending': '🟡 Kutilmoqda',
+            'approved': '🟢 Tasdiqlangan',
+            'rejected': '🔴 Rad etilgan'
+        }.get(driver['status'], '❌ Noma\'lum')
 
         await message.answer(
-            f"🚗 <b>Haydovchi menyusi</b>\n\n"
-            f"👤 {driver[2]}\n"
-            f"🚘 {driver[4]} ({driver[5]})\n"
-            f"⭐ Reyting: {driver[6]}\n"
-            f"🔄 Holat: {status_text}",
-            reply_markup=driver_menu(),
-            parse_mode="HTML"
+            f"👨‍✈️ **Profilingiz:**\n\n"
+            f"Ism: {driver['full_name']}\n"
+            f"Mashina: {driver['car_model']} ({driver['car_color']})\n"
+            f"Raqam: {driver['car_number']}\n"
+            f"Holat: {status_text}",
+            reply_markup=get_driver_keyboard(),
+            parse_mode="Markdown"
         )
     else:
         await message.answer(
-            "🚗 <b>Haydovchi bo'lish</b>\n\n"
-            "Ro'yxatdan o'tish uchun /register bosing",
-            parse_mode="HTML"
+            "👨‍✈️ **Haydovchi bo'lish**\n\n"
+            "Ro'yxatdan o'tish uchun '📝 Ro'yxatdan o'tish' tugmasini bosing.",
+            reply_markup=get_driver_keyboard(),
+            parse_mode="Markdown"
         )
 
 
-# ============================================
-# 8️⃣ HAYDOVCHI RO'YXATDAN O'TISH
-# ============================================
-@dp.message(Command("register"))
-async def register_start(message: types.Message, state: FSMContext):
-    await state.set_state(RegisterState.name)
+@dp.message(F.text == "📝 Ro'yxatdan o'tish")
+async def start_driver_registration(message: types.Message, state: FSMContext):
+    driver = await get_driver_by_user_id(message.from_user.id)
+    if driver:
+        await message.answer("❌ Siz allaqachon ro'yxatdan o'tgansiz!")
+        return
+
     await message.answer(
-        "👤 <b>Haydovchi ro'yxatdan o'tish</b>\n\n"
-        "Ism-familiyangizni kiriting:",
-        reply_markup=cancel_kb(),
-        parse_mode="HTML"
+        "1️⃣ Ism familiyangizni yozing:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="🔙 Bosh menyu")]],
+            resize_keyboard=True
+        )
     )
+    await state.set_state(DriverRegistration.waiting_for_name)
 
 
-@dp.message(RegisterState.name)
-async def register_name(message: types.Message, state: FSMContext):
-    if message.text == "❌ Bekor qilish":
+@dp.message(DriverRegistration.waiting_for_name)
+async def process_driver_name(message: types.Message, state: FSMContext):
+    if message.text == "🔙 Bosh menyu":
         await state.clear()
-        await message.answer("❌ Bekor qilindi", reply_markup=main_menu())
+        await message.answer("Bosh menyu", reply_markup=get_main_keyboard())
         return
 
     await state.update_data(full_name=message.text)
-    await state.set_state(RegisterState.phone)
     await message.answer(
-        "📞 Telefon raqamingizni yuboring:",
-        reply_markup=phone_kb()
+        "2️⃣ Telefon raqamingizni yozing:",
+        reply_markup=get_contact_keyboard()
     )
+    await state.set_state(DriverRegistration.waiting_for_phone)
 
 
-@dp.message(RegisterState.phone)
-async def register_phone(message: types.Message, state: FSMContext):
-    if message.text == "🔙 Orqaga":
-        await state.set_state(RegisterState.name)
-        await message.answer("Ismingizni kiriting:", reply_markup=cancel_kb())
+@dp.message(DriverRegistration.waiting_for_phone, F.contact)
+async def process_driver_phone_contact(message: types.Message, state: FSMContext):
+    phone = message.contact.phone_number
+    await state.update_data(phone=phone)
+    await message.answer(
+        "3️⃣ Mashina modeli:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="🔙 Bosh menyu")]],
+            resize_keyboard=True
+        )
+    )
+    await state.set_state(DriverRegistration.waiting_for_car_model)
+
+
+@dp.message(DriverRegistration.waiting_for_phone, F.text)
+async def process_driver_phone_text(message: types.Message, state: FSMContext):
+    if message.text == "🔙 Bosh menyu":
+        await state.clear()
+        await message.answer("Bosh menyu", reply_markup=get_main_keyboard())
         return
 
-    if message.contact:
-        phone = message.contact.phone_number
-    else:
-        phone = message.text
-
-    await state.update_data(phone=phone)
-    await state.set_state(RegisterState.car_model)
+    await state.update_data(phone=message.text)
     await message.answer(
-        "🚗 Mashinangiz modeli:",
-        reply_markup=cancel_kb()
+        "3️⃣ Mashina modeli:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="🔙 Bosh menyu")]],
+            resize_keyboard=True
+        )
     )
+    await state.set_state(DriverRegistration.waiting_for_car_model)
 
 
-@dp.message(RegisterState.car_model)
-async def register_car(message: types.Message, state: FSMContext):
-    if message.text == "❌ Bekor qilish":
+@dp.message(DriverRegistration.waiting_for_car_model)
+async def process_driver_car_model(message: types.Message, state: FSMContext):
+    if message.text == "🔙 Bosh menyu":
         await state.clear()
-        await message.answer("❌ Bekor qilindi", reply_markup=main_menu())
+        await message.answer("Bosh menyu", reply_markup=get_main_keyboard())
         return
 
     await state.update_data(car_model=message.text)
-    await state.set_state(RegisterState.car_number)
     await message.answer(
-        "🔢 Davlat raqami:",
-        reply_markup=cancel_kb()
+        "4️⃣ Mashina raqami:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="🔙 Bosh menyu")]],
+            resize_keyboard=True
+        )
     )
+    await state.set_state(DriverRegistration.waiting_for_car_number)
 
 
-@dp.message(RegisterState.car_number)
-async def register_number(message: types.Message, state: FSMContext):
-    if message.text == "❌ Bekor qilish":
+@dp.message(DriverRegistration.waiting_for_car_number)
+async def process_driver_car_number(message: types.Message, state: FSMContext):
+    if message.text == "🔙 Bosh menyu":
         await state.clear()
-        await message.answer("❌ Bekor qilindi", reply_markup=main_menu())
+        await message.answer("Bosh menyu", reply_markup=get_main_keyboard())
         return
 
+    await state.update_data(car_number=message.text.upper())
+    await message.answer(
+        "5️⃣ Mashina rangi:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="🔙 Bosh menyu")]],
+            resize_keyboard=True
+        )
+    )
+    await state.set_state(DriverRegistration.waiting_for_car_color)
+
+
+@dp.message(DriverRegistration.waiting_for_car_color)
+async def process_driver_car_color(message: types.Message, state: FSMContext):
+    if message.text == "🔙 Bosh menyu":
+        await state.clear()
+        await message.answer("Bosh menyu", reply_markup=get_main_keyboard())
+        return
+
+    await state.update_data(car_color=message.text)
+    await message.answer(
+        "6️⃣ Haydovchilik guvohnomasi rasmini yuboring:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="🔙 Bosh menyu")]],
+            resize_keyboard=True
+        )
+    )
+    await state.set_state(DriverRegistration.waiting_for_license_photo)
+
+
+@dp.message(DriverRegistration.waiting_for_license_photo, F.photo)
+async def process_driver_license_photo(message: types.Message, state: FSMContext):
+    photo = message.photo[-1]
     data = await state.get_data()
 
-    conn = sqlite3.connect('taxi_bot.db')
-    c = conn.cursor()
-    c.execute('''INSERT INTO drivers (telegram_id, full_name, phone, car_model, car_number, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?)''',
-              (message.from_user.id, data['full_name'], data['phone'], data['car_model'], message.text, datetime.now()))
-    conn.commit()
-    conn.close()
-
-    await message.answer(
-        "✅ <b>HAYDOVCHI SIFATIDA RO'YXATDAN O'TDINGIZ!</b>\n\n"
-        f"👤 {data['full_name']}\n"
-        f"📞 {data['phone']}\n"
-        f"🚗 {data['car_model']}\n"
-        f"🔢 {message.text}\n\n"
-        f"Endi yangi buyurtmalarni qabul qilishingiz mumkin!",
-        reply_markup=driver_menu(),
-        parse_mode="HTML"
-    )
-    await state.clear()
-
-
-# ============================================
-# 9️⃣ BUYURTMA BERISH
-# ============================================
-@dp.message(lambda message: message.text == "🚖 Buyurtma berish")
-@dp.message(Command("order"))
-async def order_start(message: types.Message, state: FSMContext):
-    await state.set_state(OrderState.user_name)
-    await message.answer(
-        "👤 <b>Ismingizni kiriting:</b>",
-        reply_markup=cancel_kb(),
-        parse_mode="HTML"
+    success = await add_driver(
+        user_id=message.from_user.id,
+        full_name=data['full_name'],
+        phone=data['phone'],
+        car_model=data['car_model'],
+        car_number=data['car_number'],
+        car_color=data['car_color'],
+        license_photo=photo.file_id
     )
 
+    if success:
+        await message.answer(
+            "✅ Ro'yxatdan o'tdingiz! Admin tekshirib chiqadi.",
+            reply_markup=get_main_keyboard()
+        )
 
-@dp.message(OrderState.user_name)
-async def order_name(message: types.Message, state: FSMContext):
-    if message.text == "❌ Bekor qilish":
-        await state.clear()
-        await message.answer("❌ Buyurtma bekor qilindi!", reply_markup=main_menu())
-        return
+        # Haydovchi ma'lumotlarini olish
+        driver = await get_driver_by_user_id(message.from_user.id)
 
-    await state.update_data(user_name=message.text)
-    await state.set_state(OrderState.user_phone)
-    await message.answer(
-        "📞 <b>Telefon raqamingiz:</b>",
-        reply_markup=phone_kb(),
-        parse_mode="HTML"
-    )
-
-
-@dp.message(OrderState.user_phone)
-async def order_phone(message: types.Message, state: FSMContext):
-    if message.text == "🔙 Orqaga":
-        await state.set_state(OrderState.user_name)
-        await message.answer("👤 Ismingizni kiriting:", reply_markup=cancel_kb())
-        return
-
-    if message.contact:
-        phone = message.contact.phone_number
-    else:
-        phone = message.text
-
-    await state.update_data(user_phone=phone)
-    await state.set_state(OrderState.from_address)
-    await message.answer(
-        "📍 <b>Qayerdan?</b>\n\n"
-        "Masalan: Chilonzor 19, 5-uy",
-        reply_markup=cancel_kb(),
-        parse_mode="HTML"
-    )
-
-
-@dp.message(OrderState.from_address)
-async def order_from(message: types.Message, state: FSMContext):
-    if message.text == "❌ Bekor qilish":
-        await state.clear()
-        await message.answer("❌ Buyurtma bekor qilindi!", reply_markup=main_menu())
-        return
-
-    await state.update_data(from_address=message.text)
-    await state.set_state(OrderState.to_address)
-    await message.answer(
-        "🏁 <b>Qayerga?</b>\n\n"
-        "Masalan: Yunusobod 17, 12-uy",
-        reply_markup=cancel_kb(),
-        parse_mode="HTML"
-    )
-
-
-@dp.message(OrderState.to_address)
-async def order_to(message: types.Message, state: FSMContext):
-    if message.text == "❌ Bekor qilish":
-        await state.clear()
-        await message.answer("❌ Buyurtma bekor qilindi!", reply_markup=main_menu())
-        return
-
-    await state.update_data(to_address=message.text)
-    data = await state.get_data()
-
-    price, distance = calculate_price(data['from_address'], data['to_address'])
-    await state.update_data(price=price, distance=distance)
-
-    await message.answer(
-        f"🚖 <b>BUYURTMA MA'LUMOTLARI</b>\n\n"
-        f"👤 <b>Ism:</b> {data['user_name']}\n"
-        f"📞 <b>Telefon:</b> {data['user_phone']}\n"
-        f"📍 <b>Qayerdan:</b> {data['from_address']}\n"
-        f"🏁 <b>Qayerga:</b> {data['to_address']}\n"
-        f"📏 <b>Masofa:</b> {distance} km\n"
-        f"💰 <b>Narx:</b> {price} so'm\n\n"
-        f"Buyurtmani tasdiqlaysizmi?",
-        reply_markup=confirm_order_kb(),
-        parse_mode="HTML"
-    )
-    await state.set_state(OrderState.confirm)
-
-
-# ============================================
-# 🔟 BUYURTMA TASDIQLASH
-# ============================================
-@dp.callback_query(lambda c: c.data == "confirm")
-async def confirm_order(callback: types.CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    user_id = callback.from_user.id
-
-    conn = sqlite3.connect('taxi_bot.db')
-    c = conn.cursor()
-
-    c.execute('''INSERT INTO orders
-                 (user_id, user_name, user_phone, from_address, to_address, price, distance, status, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-              (user_id, data['user_name'], data['user_phone'], data['from_address'],
-               data['to_address'], data['price'], data['distance'], 'yangi', datetime.now()))
-    order_id = c.lastrowid
-    conn.commit()
-    conn.close()
-
-    await callback.message.edit_text(
-        f"✅ <b>BUYURTMA QABUL QILINDI!</b>\n\n"
-        f"🆔 Buyurtma raqami: <b>{order_id}</b>\n"
-        f"👤 {data['user_name']}\n"
-        f"📍 {data['from_address']} → {data['to_address']}\n"
-        f"💰 Narx: {data['price']} so'm\n\n"
-        f"⏳ <b>Haydovchi qidirilmoqda...</b>\n"
-        f"Tez orada siz bilan bog'lanamiz!"
-    )
-
-    await notify_drivers(order_id, data)
-    await state.clear()
-
-
-@dp.callback_query(lambda c: c.data == "cancel")
-async def cancel_order(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.edit_text("❌ Buyurtma bekor qilindi!")
-    await state.clear()
-
-
-# ============================================
-# 1️⃣1️⃣ HAYDOVCHILARGA XABAR YUBORISH
-# ============================================
-async def notify_drivers(order_id, order_data):
-    conn = sqlite3.connect('taxi_bot.db')
-    c = conn.cursor()
-    c.execute("SELECT telegram_id FROM drivers WHERE is_available = 1")
-    drivers = c.fetchall()
-    conn.close()
-
-    for driver in drivers:
-        try:
-            await bot.send_message(
-                driver[0],
-                f"🚖 <b>YANGI BUYURTMA! #{order_id}</b>\n\n"
-                f"👤 <b>Mijoz:</b> {order_data['user_name']}\n"
-                f"📍 <b>Qayerdan:</b> {order_data['from_address']}\n"
-                f"🏁 <b>Qayerga:</b> {order_data['to_address']}\n"
-                f"📏 <b>Masofa:</b> {order_data['distance']} km\n"
-                f"💰 <b>Narx:</b> {order_data['price']} so'm\n\n"
-                f"Buyurtmani qabul qilasizmi?",
-                reply_markup=accept_order_kb(order_id)
-            )
-        except:
-            continue
-
-
-# ============================================
-# 1️⃣2️⃣ HAYDOVCHI BUYURTMA QABUL QILISH
-# ============================================
-@dp.callback_query(lambda c: c.data.startswith('accept_'))
-async def accept_order(callback: types.CallbackQuery):
-    order_id = callback.data.split('_')[1]
-    driver_id = callback.from_user.id
-
-    conn = sqlite3.connect('taxi_bot.db')
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM drivers WHERE telegram_id = ?", (driver_id,))
-    driver = c.fetchone()
-
-    c.execute('''UPDATE orders
-                 SET driver_id   = ?,
-                     status      = 'qabul_qilindi',
-                     accepted_at = ?
-                 WHERE order_id = ?
-                   AND status = 'yangi' ''',
-              (driver_id, datetime.now(), order_id))
-
-    if c.rowcount > 0:
-        c.execute('''SELECT user_id, user_name, user_phone, from_address, to_address, price
-                     FROM orders
-                     WHERE order_id = ?''', (order_id,))
-        order = c.fetchone()
-
-        conn.commit()
+        # Admin ga xabar
+        admin_text = (
+            f"🆕 **Yangi haydovchi arizasi!**\n\n"
+            f"👤 Ism: {data['full_name']}\n"
+            f"📞 Telefon: {data['phone']}\n"
+            f"🚗 Mashina: {data['car_model']}\n"
+            f"🔢 Raqam: {data['car_number']}\n"
+            f"🎨 Rang: {data['car_color']}\n"
+            f"🆔 User ID: {message.from_user.id}"
+        )
 
         await bot.send_message(
-            order[0],
-            f"✅ <b>HAYDOVCHI TOPILDI!</b>\n\n"
-            f"🆔 Buyurtma: #{order_id}\n\n"
-            f"🚖 <b>Haydovchi ma'lumotlari:</b>\n"
-            f"👤 {driver[2]}\n"
-            f"📞 {driver[3]}\n"
-            f"🚗 {driver[4]} ({driver[5]})\n"
-            f"⭐ Reyting: {driver[6]}\n\n"
-            f"📍 {order[3]} → {order[4]}\n"
-            f"💰 {order[5]} so'm\n\n"
-            f"⏳ <b>Tez orada haydovchi siz bilan bog'lanadi!</b>"
+            ADMIN_ID,
+            admin_text,
+            reply_markup=get_admin_keyboard(driver['id'] if driver else 0),
+            parse_mode="Markdown"
         )
-
-        await callback.message.edit_text(
-            f"✅ Buyurtma #{order_id} qabul qilindi!\n"
-            f"Mijozga xabar yuborildi."
-        )
-
-        c.execute("UPDATE drivers SET is_available = 0 WHERE telegram_id = ?", (driver_id,))
-        conn.commit()
+        await bot.send_photo(ADMIN_ID, photo.file_id, caption="Haydovchilik guvohnomasi")
     else:
-        await callback.message.edit_text(
-            "❌ Buyurtma allaqachon boshqa haydovchi tomonidan qabul qilingan!"
-        )
+        await message.answer("❌ Xatolik yuz berdi! Qaytadan urinib ko'ring.")
 
-    conn.close()
+    await state.clear()
 
 
-@dp.callback_query(lambda c: c.data.startswith('reject_'))
-async def reject_order(callback: types.CallbackQuery):
-    await callback.message.edit_text("❌ Buyurtma rad etildi")
+@dp.message(DriverRegistration.waiting_for_license_photo)
+async def process_driver_license_photo_invalid(message: types.Message, state: FSMContext):
+    if message.text == "🔙 Bosh menyu":
+        await state.clear()
+        await message.answer("Bosh menyu", reply_markup=get_main_keyboard())
+        return
+    await message.answer("❌ Iltimos, rasm yuboring!")
 
 
-# ============================================
-# 1️⃣3️⃣ HAYDOVCHI MENYUSI
-# ============================================
-@dp.message(lambda message: message.text == "✅ Yangi buyurtmalar")
-async def show_new_orders(message: types.Message):
-    conn = sqlite3.connect('taxi_bot.db')
-    c = conn.cursor()
-    c.execute('''SELECT *
-                 FROM orders
-                 WHERE status = 'yangi'
-                 ORDER BY created_at DESC''')
-    orders = c.fetchall()
-    conn.close()
+# ==================== ADMIN PANEL ====================
 
-    if not orders:
-        await message.answer("📭 Yangi buyurtmalar yo'q")
+@dp.callback_query(F.data.startswith("approve_"))
+async def approve_driver(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌ Siz admin emassiz!", show_alert=True)
         return
 
-    for order in orders:
-        await message.answer(
-            f"🚖 <b>Buyurtma #{order[0]}</b>\n\n"
-            f"👤 {order[3]}\n"
-            f"📍 {order[5]} → {order[6]}\n"
-            f"📏 {order[8]} km\n"
-            f"💰 {order[7]} so'm\n"
-            f"🕐 {order[10]}",
-            reply_markup=accept_order_kb(order[0])
-        )
+    driver_id = int(callback.data.split("_")[1])
+    await update_driver_status(driver_id, 'approved')
 
+    # Haydovchiga xabar yuborish
+    async with aiosqlite.connect("taxi_bot.db") as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT user_id, full_name FROM drivers WHERE id = ?", (driver_id,))
+        driver = await cursor.fetchone()
 
-@dp.message(lambda message: message.text == "📊 Mening statistika")
-async def driver_stats(message: types.Message):
-    conn = sqlite3.connect('taxi_bot.db')
-    c = conn.cursor()
+        if driver:
+            await bot.send_message(
+                driver['user_id'],
+                f"✅ **Tabriklaymiz, {driver['full_name']}!**\n\n"
+                f"Sizning arizangiz tasdiqlandi. Endi siz haydovchi sifatida buyurtmalarni qabul qilishingiz mumkin.",
+                parse_mode="Markdown"
+            )
 
-    c.execute('''SELECT *
-                 FROM drivers
-                 WHERE telegram_id = ?''', (message.from_user.id,))
-    driver = c.fetchone()
-
-    c.execute('''SELECT COUNT(*)
-                 FROM orders
-                 WHERE driver_id = ?
-                   AND status = 'bajarildi' ''', (driver[0],))
-    completed = c.fetchone()[0]
-
-    c.execute('''SELECT COUNT(*)
-                 FROM orders
-                 WHERE driver_id = ?
-                   AND status = 'qabul_qilindi' ''', (driver[0],))
-    current = c.fetchone()[0]
-
-    conn.close()
-
-    status_text = "✅ Bo'sh" if driver[7] else "⏳ Band"
-
-    await message.answer(
-        f"📊 <b>STATISTIKA</b>\n\n"
-        f"👤 {driver[2]}\n"
-        f"🚗 {driver[4]} ({driver[5]})\n"
-        f"⭐ Reyting: {driver[6]}\n"
-        f"✅ Bajarilgan: {completed}\n"
-        f"⏳ Joriy: {current}\n"
-        f"🔄 Holat: {status_text}",
-        parse_mode="HTML"
+    await callback.message.edit_text(
+        callback.message.text + "\n\n✅ **Tasdiqlandi!**",
+        parse_mode="Markdown"
     )
+    await callback.answer("Haydovchi tasdiqlandi!")
 
 
-@dp.message(lambda message: message.text == "🔄 Holatni o'zgartirish")
-async def toggle_availability(message: types.Message):
-    conn = sqlite3.connect('taxi_bot.db')
-    c = conn.cursor()
-    c.execute('''UPDATE drivers
-                 SET is_available = NOT is_available
-                 WHERE telegram_id = ?''', (message.from_user.id,))
-    conn.commit()
-
-    c.execute('''SELECT is_available
-                 FROM drivers
-                 WHERE telegram_id = ?''', (message.from_user.id,))
-    status = c.fetchone()[0]
-    conn.close()
-
-    status_text = "✅ Bo'sh" if status else "⏳ Band"
-    await message.answer(f"✅ Holat o'zgartirildi: {status_text}")
-
-
-# ============================================
-# 1️⃣4️⃣ MENING BUYURTMALARIM
-# ============================================
-@dp.message(lambda message: message.text == "📋 Mening buyurtmalarim")
-async def my_orders(message: types.Message):
-    conn = sqlite3.connect('taxi_bot.db')
-    c = conn.cursor()
-    c.execute('''SELECT *
-                 FROM orders
-                 WHERE user_id = ?
-                 ORDER BY created_at DESC LIMIT 5''',
-              (message.from_user.id,))
-    orders = c.fetchall()
-    conn.close()
-
-    if not orders:
-        await message.answer("📭 Sizda hali buyurtmalar yo'q")
+@dp.callback_query(F.data.startswith("reject_"))
+async def reject_driver(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌ Siz admin emassiz!", show_alert=True)
         return
 
-    text = "📋 <b>OXIRGI 5 TA BUYURTMA</b>\n\n"
-    for order in orders:
-        status_emoji = {
-            'yangi': '⏳',
-            'qabul_qilindi': '✅',
-            'bajarildi': '🎉',
-            'bekor_qilindi': '❌'
-        }
-        text += f"{status_emoji.get(order[9], '⏳')} <b>#{order[0]}</b>\n"
-        text += f"📍 {order[5]} → {order[6]}\n"
-        text += f"💰 {order[7]} so'm\n"
-        text += f"📏 {order[8]} km\n"
-        text += f"🕐 {order[10][:16]}\n\n"
+    driver_id = int(callback.data.split("_")[1])
+    await update_driver_status(driver_id, 'rejected')
 
-    await message.answer(text, parse_mode="HTML")
+    # Haydovchiga xabar yuborish
+    async with aiosqlite.connect("taxi_bot.db") as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT user_id, full_name FROM drivers WHERE id = ?", (driver_id,))
+        driver = await cursor.fetchone()
+
+        if driver:
+            await bot.send_message(
+                driver['user_id'],
+                f"❌ **Afsus, {driver['full_name']}!**\n\n"
+                f"Sizning arizangiz rad etildi. Qo'shimcha ma'lumot olish uchun admin bilan bog'lanishingiz mumkin.",
+                parse_mode="Markdown"
+            )
+
+    await callback.message.edit_text(
+        callback.message.text + "\n\n❌ **Rad etildi!**",
+        parse_mode="Markdown"
+    )
+    await callback.answer("Haydovchi rad etildi!")
 
 
-# ============================================
-# 1️⃣5️⃣ YORDAM VA ALOQA
-# ============================================
-@dp.message(lambda message: message.text == "📞 Aloqa")
+# ==================== BOSHQA HANDLERLAR ====================
+
+@dp.message(F.text == "📞 Aloqa")
 async def contact(message: types.Message):
     await message.answer(
-        "📞 <b>BIZ BILAN BOG'LANISH</b>\n\n"
-        "☎️ Telefon: +998 90 123 45 67\n"
-        "📧 Email: support@taksi24.uz\n"
-        "🌐 Sayt: https://taksi24.uz\n\n"
-        "⏰ 24/7",
-        parse_mode="HTML"
+        "📞 **Aloqa ma'lumotlari:**\n\n"
+        "📱 Telefon: +998 90 123 45 67\n"
+        "📧 Email: support@taxibot.uz\n"
+        "🌐 Website: www.taxibot.uz",
+        parse_mode="Markdown"
     )
 
 
-@dp.message(lambda message: message.text == "⚙️ Yordam")
-@dp.message(Command("help"))
-async def help(message: types.Message):
+@dp.message(F.text == "ℹ️ Yordam")
+async def help_command(message: types.Message):
     await message.answer(
-        "🚕 <b>YORDAM</b>\n\n"
-        "📌 <b>Buyruqlar:</b>\n"
-        "/start - Botni ishga tushirish\n"
-        "/order - Taksi buyurtma qilish\n"
-        "/register - Haydovchi bo'lish\n"
-        "/help - Yordam\n\n"
-        "🚖 <b>Mijozlar uchun:</b>\n"
-        "- Buyurtma berish\n"
-        "- Narxlarni ko'rish\n"
-        "- Haydovchini kuzatish\n\n"
-        "🚗 <b>Haydovchilar uchun:</b>\n"
-        "- Ro'yxatdan o'tish\n"
-        "- Yangi buyurtmalarni ko'rish\n"
-        "- Statistika\n\n"
-        "📞 Aloqa: +998 90 123 45 67",
-        reply_markup=main_menu(),
-        parse_mode="HTML"
+        "ℹ️ **Yordam**\n\n"
+        "🚖 Taksi chaqirish - taksi buyurtma qilish\n"
+        "👨‍✈️ Haydovchi bo'lish - haydovchi sifatida ro'yxatdan o'tish\n"
+        "👤 Profilim - shaxsiy ma'lumotlaringiz\n"
+        "📞 Aloqa - admin bilan bog'lanish\n\n"
+        "Muammo yuzaga kelsa, admin bilan bog'lanishingiz mumkin.",
+        parse_mode="Markdown"
     )
 
 
-# ============================================
-# 1️⃣6️⃣ ORQAGA QAYTISH
-# ============================================
-@dp.message(lambda message: message.text == "🔙 Asosiy menyu")
+@dp.message(F.text == "👤 Profilim")
+async def profile(message: types.Message):
+    await message.answer(
+        f"👤 **Profilingiz:**\n\n"
+        f"Ism: {message.from_user.full_name}\n"
+        f"Username: @{message.from_user.username if message.from_user.username else 'mavjud emas'}\n"
+        f"ID: {message.from_user.id}",
+        parse_mode="Markdown"
+    )
+
+
+@dp.message(F.text == "📊 Mening statistika")
+async def driver_statistics(message: types.Message):
+    driver = await get_driver_by_user_id(message.from_user.id)
+
+    if not driver or driver['status'] != 'approved':
+        await message.answer("❌ Siz tasdiqlangan haydovchi emassiz!")
+        return
+
+    async with aiosqlite.connect("taxi_bot.db") as db:
+        # Haydovchining bajargan buyurtmalari statistikasi
+        cursor = await db.execute(
+            "SELECT COUNT(*) as total FROM orders WHERE driver_id = ? AND status = 'completed'",
+            (driver['id'],)
+        )
+        stats = await cursor.fetchone()
+
+        total_orders = stats[0] if stats[0] else 0
+
+        await message.answer(
+            f"📊 **Statistikangiz:**\n\n"
+            f"🚖 Bajarilgan buyurtmalar: {total_orders}",
+            parse_mode="Markdown"
+        )
+
+
+@dp.message(F.text == "🔙 Bosh menyu")
 async def back_to_main(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("Asosiy menyu", reply_markup=main_menu())
+    await message.answer("Bosh menyu", reply_markup=get_main_keyboard())
 
 
-@dp.message(lambda message: message.text == "❌ Bekor qilish")
-async def cancel_all(message: types.Message, state: FSMContext):
-    await state.clear()
-    await message.answer("❌ Bekor qilindi", reply_markup=main_menu())
+# ==================== ASOSIY ====================
 
-
-# ============================================
-# 1️⃣7️⃣ BOTNI ISHGA TUSHIRISH
-# ============================================
 async def main():
-    print("=" * 50)
-    print("🚖 TAKSI BOT ISHGA TUSHDI!")
-    print("🤖 Bot: @taksi24_uz_bot")
-    print("📊 Vaqt: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    print("=" * 50)
+    await init_db()
+    await create_test_driver()  # Test haydovchi yaratish
+    print("🚀 Bot ishga tushdi!")
     await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("❌ Bot to'xtatildi")
