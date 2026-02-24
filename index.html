@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ozoda Olimova | Python Developer Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+        }
+
+        /* Header qismi - katta va chiroyli */
+        .hero {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320"><path fill="%23ffffff" fill-opacity="0.1" d="M0,96L48,112C96,128,192,160,288,160C384,160,480,128,576,122.7C672,117,768,139,864,154.7C960,171,1056,181,1152,165.3C1248,149,1344,107,1392,85.3L1440,64L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>');
+            background-repeat: no-repeat;
+            background-position: bottom;
+            background-size: cover;
+            opacity: 0.1;
+        }
+
+        .hero-content {
+            text-align: center;
+            color: white;
+            z-index: 1;
+            padding: 2rem;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            animation: fadeInDown 1s ease;
+        }
+
+        .hero h2 {
+            font-size: 2rem;
+            font-weight: 400;
+            margin-bottom: 1rem;
+            opacity: 0.95;
+            animation: fadeInUp 1s ease;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            max-width: 600px;
+            margin: 0 auto;
+            animation: fadeIn 1.5s ease;
+        }
+
+        /* Animatsiyalar */
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* Asosiy kontent */
+        .main-content {
+            background: white;
+            border-radius: 3rem 3rem 0 0;
+            margin-top: -5rem;
+            padding: 4rem 2rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Shaxsiy ma'lumotlar */
+        .personal-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 4rem;
+        }
+
+        .info-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 2rem;
+            box-shadow: 0 20px 40px rgba(102, 126, 234, 0.3);
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .info-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+            transform: rotate(45deg);
+            animation: shine 3s infinite;
+        }
+
+        @keyframes shine {
+            0% {
+                transform: translateX(-100%) translateY(-100%) rotate(45deg);
+            }
+            100% {
+                transform: translateX(100%) translateY(100%) rotate(45deg);
+            }
+        }
+
+        .info-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 30px 60px rgba(102, 126, 234, 0.4);
+        }
+
+        .info-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .info-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .info-card p {
+            font-size: 1.1rem;
+            opacity: 0.95;
+        }
+
+        /* Kompyuterlar grid */
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin: 3rem 0;
+            color: #333;
+            position: relative;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 4px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+        }
+
+        .computers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-bottom: 4rem;
+        }
+
+        .computer-card {
+            background: white;
+            border-radius: 2rem;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            border: 1px solid #eee;
+        }
+
+        .computer-card:hover {
+            transform: translateY(-15px);
+            box-shadow: 0 30px 50px rgba(102, 126, 234, 0.3);
+            border-color: #667eea;
+        }
+
+        .computer-image {
+            width: 100%;
+            height: 250px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 5rem;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .computer-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .computer-info {
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .computer-info h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+
+        .computer-info p {
+            color: #666;
+            margin-bottom: 1rem;
+        }
+
+        .tech-stack {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+        }
+
+        .tech-badge {
+            background: #f0f0f0;
+            color: #667eea;
+            padding: 0.3rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        /* Statistika */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin: 4rem 0;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 2rem;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 1.5rem;
+            transition: all 0.3s;
+        }
+
+        .stat-item:hover {
+            transform: scale(1.05);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .stat-item:hover .stat-number {
+            color: white;
+        }
+
+        .stat-label {
+            font-size: 1.1rem;
+            color: #666;
+        }
+
+        .stat-item:hover .stat-label {
+            color: white;
+        }
+
+        /* Kontakt bo'limi */
+        .contact-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 3rem;
+            padding: 4rem;
+            margin: 4rem 0;
+            color: white;
+            text-align: center;
+        }
+
+        .contact-title {
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .contact-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .contact-card {
+            background: rgba(255,255,255,0.1);
+            padding: 2rem;
+            border-radius: 1.5rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .contact-card:hover {
+            transform: translateY(-10px);
+            background: rgba(255,255,255,0.2);
+            border-color: white;
+        }
+
+        .contact-card i {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .contact-card a {
+            color: white;
+            text-decoration: none;
+            font-size: 1.2rem;
+            display: block;
+            margin-top: 0.5rem;
+        }
+
+        .contact-card a:hover {
+            text-decoration: underline;
+        }
+
+        .contact-button {
+            display: inline-block;
+            background: white;
+            color: #667eea;
+            padding: 1rem 3rem;
+            border-radius: 3rem;
+            text-decoration: none;
+            font-size: 1.2rem;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        .contact-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: white;
+            background: rgba(0,0,0,0.2);
+            border-radius: 2rem;
+            margin-top: 2rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+            .hero h2 {
+                font-size: 1.5rem;
+            }
+            .section-title {
+                font-size: 2rem;
+            }
+            .computers-grid {
+                grid-template-columns: 1fr;
+            }
+            .contact-section {
+                padding: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section - Katta kirish qismi -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>👩‍💻 Ozoda Olimova</h1>
+            <h2>Python Developer & Tech Enthusiast</h2>
+            <p>Yosh dasturchi, 10+ loyiha, 1+ yillik tajriba</p>
+        </div>
+    </section>
+
+    <div class="main-content">
+        <div class="container">
+            <!-- Shaxsiy ma'lumotlar -->
+            <h2 class="section-title">👤 Men haqimda</h2>
+            <div class="personal-info">
+                <div class="info-card">
+                    <div class="info-icon">🎂</div>
+                    <h3>Yoshim</h3>
+                    <p>26 yosh</p>
+                    <p>24.06.2000</p>
+                </div>
+                <div class="info-card">
+                    <div class="info-icon">🎓</div>
+                    <h3>O'qish joyim</h3>
+                    <p>Toshkent Renessans ta'lim universiteti</p>
+                    <p>3-kurs, Dasturiy injiniring</p>
+                </div>
+                <div class="info-card">
+                    <div class="info-icon">📍</div>
+                    <h3>Manzil</h3>
+                    <p>Toshkent,  Samarqand,  O'zbekiston,</p>
+                    <p>Mirobod, Pastdarg'om</p>
+                </div>
+            </div>
+
+            <!-- Statistika -->
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-number">10+</div>
+                    <div class="stat-label">Loyihalar</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">6+</div>
+                    <div class="stat-label">Mijozlar</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">1+</div>
+                    <div class="stat-label">Yillik tajriba</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">24/7</div>
+                    <div class="stat-label">Online</div>
+                </div>
+            </div>
+
+            <!-- Kompyuterlar va dasturlar -->
+            <h2 class="section-title">💻 Men ishlaydigan dasturlar</h2>
+            <div class="computers-grid">
+                <!-- PyCharm -->
+                <div class="computer-card">
+                    <div class="computer-image">
+                        <i class="fab fa-python"></i>
+                    </div>
+                    <div class="computer-info">
+                        <h3>PyCharm</h3>
+                        <p>Python development uchun asosiy IDE</p>
+                        <div class="tech-stack">
+                            <span class="tech-badge">Python</span>
+                            <span class="tech-badge">Django</span>
+                            <span class="tech-badge">Flask</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VS Code -->
+                <div class="computer-card">
+                    <div class="computer-image">
+                        <i class="fas fa-code"></i>
+                    </div>
+                    <div class="computer-info">
+                        <h3>VS Code</h3>
+                        <p>Frontend va boshqa tillar uchun</p>
+                        <div class="tech-stack">
+                            <span class="tech-badge">HTML5</span>
+                            <span class="tech-badge">CSS3</span>
+                            <span class="tech-badge">JavaScript</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PostgreSQL -->
+                <div class="computer-card">
+                    <div class="computer-image">
+                        <i class="fas fa-database"></i>
+                    </div>
+                    <div class="computer-info">
+                        <h3>PostgreSQL</h3>
+                        <p>Ma'lumotlar bazasi boshqaruvi</p>
+                        <div class="tech-stack">
+                            <span class="tech-badge">SQL</span>
+                            <span class="tech-badge">Database</span>
+                            <span class="tech-badge">PgAdmin</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Git -->
+                <div class="computer-card">
+                    <div class="computer-image">
+                        <i class="fab fa-git-alt"></i>
+                    </div>
+                    <div class="computer-info">
+                        <h3>Git & GitHub</h3>
+                        <p>Versiya nazorati va hamkorlik</p>
+                        <div class="tech-stack">
+                            <span class="tech-badge">Git</span>
+                            <span class="tech-badge">GitHub</span>
+                            <span class="tech-badge">GitLab</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Docker -->
+                <div class="computer-card">
+                    <div class="computer-image">
+                        <i class="fab fa-docker"></i>
+                    </div>
+                    <div class="computer-info">
+                        <h3>Docker</h3>
+                        <p>Konteynerlash va deploy</p>
+                        <div class="tech-stack">
+                            <span class="tech-badge">Docker</span>
+                            <span class="tech-badge">Kubernetes</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Linux -->
+                <div class="computer-card">
+                    <div class="computer-image">
+                        <i class="fab fa-linux"></i>
+                    </div>
+                    <div class="computer-info">
+                        <h3>Linux</h3>
+                        <p>Ubuntu server boshqaruvi</p>
+                        <div class="tech-stack">
+                            <span class="tech-badge">Bash</span>
+                            <span class="tech-badge">Nginx</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kontakt bo'limi -->
+            <section class="contact-section">
+                <h2 class="contact-title">📞 Men bilan bog'laning</h2>
+                <div class="contact-grid">
+                    <div class="contact-card">
+                        <i class="fab fa-telegram-plane"></i>
+                        <h3>Telegram</h3>
+                        <a href="https://t.me/olimovaozoda" target="_blank">@olimovaozoda</a>
+                    </div>
+                    <div class="contact-card">
+                        <i class="fas fa-envelope"></i>
+                        <h3>Email</h3>
+                        <a href="mailto:olimovaozoda33@gmail.com">olimovaozoda33@gmail.com</a>
+                    </div>
+                    <div class="contact-card">
+                        <i class="fab fa-instagram"></i>
+                        <h3>Instagram</h3>
+                        <a href="https://instagram.com/ozoda.24.06" target="_blank">@ozoda.24.06</a>
+                    </div>
+                    <div class="contact-card">
+                        <i class="fab fa-github"></i>
+                        <h3>GitHub</h3>
+                        <a href="#" target="_blank">github.com/ozoda</a>
+                    </div>
+                </div>
+                <a href="https://t.me/olimovaozoda" class="contact-button" target="_blank">
+                    <i class="fab fa-telegram"></i> Telegramda yozish
+                </a>
+                <p style="margin-top: 2rem; opacity: 0.9;">
+                    ⏰ 24/7 online | Javob berish vaqti: 5-10 daqiqa
+                </p>
+            </section>
+
+            <!-- Footer -->
+            <div class="footer">
+                <p>© 2024 Ozoda Olimova. Barcha huquqlar himoyalangan.</p>
+                <p style="margin-top: 0.5rem;">✨ Har bir kod - yangi imkoniyat ✨</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
