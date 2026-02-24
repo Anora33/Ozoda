@@ -1,0 +1,50 @@
+# Environment fayllar
+.env
+.genv
+.env.local
+.env.production
+
+# Database fayllar
+*.db
+*.sqlite
+*.sqlite3
+taxi_bot.db
+
+# Python kesh fayllari
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environment
+.venv/
+venv/
+env/
+ENV/
+.virtualenv/
+
+# IDE fayllari
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Bot tokenlari
+*token*
+*BOT_TOKEN*
+*TELEGRAM_TOKEN*
+
+# Test fayllari
+test_token.py
+test_*.py
+
+# Log fayllari
+*.log
+logs
