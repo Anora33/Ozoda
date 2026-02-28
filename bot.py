@@ -318,15 +318,56 @@ async def cancel_order(callback: types.CallbackQuery, state: FSMContext):
 
 
 # --- HAYDOVCHILAR UCHUN ---
+@dp.message(F.text == "👨‍✈️ Haydovchi bo'lish")
+async def driver_menu(message: types.Message):
+    driver = await get_driver_by_user_id(message.from_user.id)
+
+    if driver:
+        status_text = {
+            'pending': "🟡 Ko'rib chiqilmoqda",
+            'approved': "🟢 Tasdiqlangan",
+            'rejected': "🔴 Rad etilgan"
+        }
+
+        driver_status = driver['status']
+        status_name = status_text.get(driver_status, 'Noma\'lum')
+
+        text = (
+            f"👨‍✈️ **Sizning profilingiz:**\n\n"
+            f"👤 Ism: {driver['full_name']}\n"
+            f"📞 Telefon: {driver['phone']}\n"
+            f"🚗 Mashina: {driver['car_model']} ({driver['car_number']}) - {driver['car_color']}\n"
+            f"📊 Holat: {status_name}\n\n"
+            f"📅 Ro'yxatdan o'tgan: {driver['registered_at']}"
+        )
+
+        await message.answer(text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+    else:
+        await message.answer(
+            "👨‍✈️ **Haydovchi bo'lish**\n\n"
+            "Haydovchi bo'lish uchun quyidagi tugmani bosing va ro'yxatdan o'ting.\n\n"
+            "Ro'yxatdan o'tgach, administrator ma'lumotlaringizni tekshirib chiqadi.",
+            reply_markup=get_driver_keyboard(),
+            parse_mode="Markdown"
+        )
+
 
 @dp.message(F.text == "📝 Ro'yxatdan o'tish")
 async def start_driver_registration(message: types.Message, state: FSMContext):
     driver = await get_driver_by_user_id(message.from_user.id)
     if driver:
-        await message.answer("❌ Siz allaqachon ro'yxatdan o'tgansiz!")
+        await message.answer(
+            "❌ Siz allaqachon ro'yxatdan o'tgansiz!\n\n"
+            "Profilingizni ko'rish uchun '👨‍✈️ Haydovchi bo'lish' tugmasini bosing.",
+            reply_markup=get_main_keyboard()
+        )
         return
 
-    await message.answer("1️⃣ Ism familiyangizni yozing:")
+    await message.answer(
+        "📝 **Haydovchi ro'yxatdan o'tish**\n\n"
+        "1️⃣ Qadam: Ism va familiyangizni yozing (masalan: Aliyev Alijon):",
+        parse_mode="Markdown"
+    )
     await state.set_state(DriverRegistration.waiting_for_name)
 
 
@@ -334,8 +375,8 @@ async def start_driver_registration(message: types.Message, state: FSMContext):
 async def process_driver_name(message: types.Message, state: FSMContext):
     await state.update_data(full_name=message.text)
     await message.answer(
-        "📞 Telefon raqamingizni yuboring.\n\n"
-        "Quyidagi tugma orqali yuborishingiz mumkin:",
+        "2️⃣ Qadam: Telefon raqamingizni yuboring.\n\n"
+        "Quyidagi tugma orqali yuborishingiz mumkin yoki qo'lda yozing:",
         reply_markup=get_phone_keyboard()
     )
     await state.set_state(DriverRegistration.waiting_for_phone)
@@ -343,11 +384,12 @@ async def process_driver_name(message: types.Message, state: FSMContext):
 
 @dp.message(DriverRegistration.waiting_for_phone, F.contact)
 async def process_driver_phone_contact(message: types.Message, state: FSMContext):
-    # Kontact orqali telefon raqam olish
+    # Kontakt orqali telefon raqam olish
     phone = message.contact.phone_number
     await state.update_data(phone=phone)
     await message.answer(
-        "3️⃣ Mashina modelini yozing (masalan: Nexia 3, Cobalt, Lacetti):",
+        "✅ Telefon raqam qabul qilindi!\n\n"
+        "3️⃣ Qadam: Mashina modelini yozing (masalan: Nexia 3, Cobalt, Lacetti):",
         reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="🔙 Ortga")]], resize_keyboard=True)
     )
     await state.set_state(DriverRegistration.waiting_for_car_model)
@@ -363,25 +405,195 @@ async def process_driver_phone_text(message: types.Message, state: FSMContext):
     phone = message.text
     await state.update_data(phone=phone)
     await message.answer(
-        "3️⃣ Mashina modelini yozing (masalan: Nexia 3, Cobalt, Lacetti):",
+        "✅ Telefon raqam qabul qilindi!\n\n"
+        "3️⃣ Qadam: Mashina modelini yozing (masalan: Nexia 3, Cobalt, Lacetti):",
         reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="🔙 Ortga")]], resize_keyboard=True)
     )
     await state.set_state(DriverRegistration.waiting_for_car_model)
 
 
-# Ortga qaytish handleri
-@dp.message(F.text == "🔙 Ortga")
-async def go_back(message: types.Message, state: FSMContext):
-    current_state = await state.get_state()
-    if current_state in [DriverRegistration.waiting_for_phone,
-                         DriverRegistration.waiting_for_car_model,
-                         DriverRegistration.waiting_for_car_number,
-                         DriverRegistration.waiting_for_car_color,
-                         DriverRegistration.waiting_for_license_photo]:
+@dp.message(DriverRegistration.waiting_for_car_model)
+async def process_driver_car_model(message: types.Message, state: FSMContext):
+    if message.text == "🔙 Ortga":
         await start_driver_registration(message, state)
+        return
+
+    await state.update_data(car_model=message.text)
+    await message.answer(
+        "4️⃣ Qadam: Mashina raqamini yozing (masalan: 01A123BC, 01 123 ABC):",
+        reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="🔙 Ortga")]], resize_keyboard=True)
+    )
+    await state.set_state(DriverRegistration.waiting_for_car_number)
+
+
+@dp.message(DriverRegistration.waiting_for_car_number)
+async def process_driver_car_number(message: types.Message, state: FSMContext):
+    if message.text == "🔙 Ortga":
+        await start_driver_registration(message, state)
+        return
+
+    await state.update_data(car_number=message.text)
+    await message.answer(
+        "5️⃣ Qadam: Mashina rangini yozing (masalan: Oq, Qora, Kulrang):",
+        reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="🔙 Ortga")]], resize_keyboard=True)
+    )
+    await state.set_state(DriverRegistration.waiting_for_car_color)
+
+
+@dp.message(DriverRegistration.waiting_for_car_color)
+async def process_driver_car_color(message: types.Message, state: FSMContext):
+    if message.text == "🔙 Ortga":
+        await start_driver_registration(message, state)
+        return
+
+    await state.update_data(car_color=message.text)
+    await message.answer(
+        "6️⃣ Qadam: Haydovchilik guvohnomasi rasmini yuboring:\n\n"
+        "Iltimos, guvohnomangizning aniq rasmini yuboring.",
+        reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="🔙 Ortga")]], resize_keyboard=True)
+    )
+    await state.set_state(DriverRegistration.waiting_for_license_photo)
+
+
+@dp.message(DriverRegistration.waiting_for_license_photo, F.photo)
+async def process_driver_license_photo(message: types.Message, state: FSMContext):
+    photo = message.photo[-1]
+    data = await state.get_data()
+
+    success = await add_driver(
+        user_id=message.from_user.id,
+        full_name=data['full_name'],
+        phone=data['phone'],
+        car_model=data['car_model'],
+        car_number=data['car_number'],
+        car_color=data['car_color'],
+        license_photo=photo.file_id
+    )
+
+    if success:
+        await message.answer(
+            "✅ **Ro'yxatdan o'tish muvaffaqiyatli!**\n\n"
+            "Ma'lumotlaringiz administratorga yuborildi.\n"
+            "Tekshiruvdan so'ng sizga xabar beramiz.\n\n"
+            "Ortacha tekshirish vaqti: 5-10 daqiqa.",
+            reply_markup=get_main_keyboard(),
+            parse_mode="Markdown"
+        )
+
+        # Admin ga xabar yuborish
+        username = message.from_user.username if message.from_user.username else 'yoq'
+
+        admin_text = (
+            f"🆕 **Yangi haydovchi ro'yxatdan o'tdi!**\n\n"
+            f"👤 Ism: {data['full_name']}\n"
+            f"📞 Telefon: {data['phone']}\n"
+            f"🚗 Mashina: {data['car_model']} ({data['car_number']}) - {data['car_color']}\n"
+            f"🆔 User ID: `{message.from_user.id}`\n"
+            f"👤 Username: @{username}"
+        )
+
+        await bot.send_message(ADMIN_ID, admin_text, reply_markup=get_admin_keyboard(), parse_mode="Markdown")
+        await bot.send_photo(ADMIN_ID, photo.file_id, caption="📄 Haydovchilik guvohnomasi")
     else:
-        await message.answer("Bosh menyu", reply_markup=get_main_keyboard())
-        await state.clear()
+        await message.answer(
+            "❌ Xatolik yuz berdi!\n\n"
+            "Iltimos, qayta urinib ko'ring.",
+            reply_markup=get_main_keyboard()
+        )
+
+    await state.clear()
+
+    await state.clear()
+
+    @dp.message(DriverRegistration.waiting_for_license_photo)  # <-- Oldida bo'sh joy YO'Q!
+    async def process_driver_license_photo_invalid(message: types.Message, state: FSMContext):
+        # kod
+
+        @dp.message(DriverRegistration.waiting_for_license_photo)  # 511-qator
+        async def process_driver_license_photo_invalid(message: types.Message, state: FSMContext):  # 512-qator
+            if message.text == "🔙 Ortga":  # 513-qator (4 bo'sh joy)
+                await start_driver_registration(message, state)  # 514-qator (8 bo'sh joy)
+                return  # 515-qator (8 bo'sh joy)
+
+            await message.answer(  # 516-qator (4 bo'sh joy)
+                "❌ Iltimos, haydovchilik guvohnomasining rasmini yuboring!",
+                reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="🔙 Ortga")]], resize_keyboard=True)
+            )
+
+        await message.answer(
+            "❌ Iltimos, haydovchilik guvohnomasining rasmini yuboring!\n\n"
+            "Rasm yuborish uchun: 📎 (skrepka) belgisini bosing va rasm tanlang.",
+            reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="🔙 Ortga")]], resize_keyboard=True)
+        )
+
+    @dp.message(F.text == "📊 Mening statistika")
+    async def driver_stats(message: types.Message):
+        driver = await get_driver_by_user_id(message.from_user.id)
+
+        if not driver:
+            await message.answer(
+                "❌ Siz haydovchi sifatida ro'yxatdan o'tmagansiz!\n\n"
+                "Ro'yxatdan o'tish uchun '👨‍✈️ Haydovchi bo'lish' tugmasini bosing.",
+                reply_markup=get_main_keyboard()
+            )
+            return
+
+        if driver['status'] != 'approved':
+            await message.answer(
+                "⚠️ Statistikani ko'rish uchun haydovchi sifatida tasdiqlangan bo'lishingiz kerak.\n\n"
+                "Hozirgi holatingiz: " + ("🟡 Kutilmoqda" if driver['status'] == 'pending' else "🔴 Rad etilgan"),
+                reply_markup=get_main_keyboard()
+            )
+            return
+
+        # Statistika ma'lumotlarini olish
+        async with aiosqlite.connect("taxi_bot.db") as db:
+            # Haydovchining buyurtmalari
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM orders WHERE driver_id = ? AND status = 'completed'",
+                (message.from_user.id,)
+            )
+            completed_orders = await cursor.fetchone()
+
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM orders WHERE driver_id = ? AND status = 'cancelled'",
+                (message.from_user.id,)
+            )
+            cancelled_orders = await cursor.fetchone()
+
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM orders WHERE driver_id = ? AND status = 'pending'",
+                (message.from_user.id,)
+            )
+            pending_orders = await cursor.fetchone()
+
+            cursor = await db.execute(
+                "SELECT SUM(price) FROM orders WHERE driver_id = ? AND status = 'completed'",
+                (message.from_user.id,)
+            )
+            total_earnings = await cursor.fetchone()
+
+        stats_text = (
+            f"📊 **Sizning statistikangiz:**\n\n"
+            f"✅ Bajarilgan buyurtmalar: {completed_orders[0] if completed_orders else 0}\n"
+            f"⏳ Kutilayotgan buyurtmalar: {pending_orders[0] if pending_orders else 0}\n"
+            f"❌ Bekor qilingan buyurtmalar: {cancelled_orders[0] if cancelled_orders else 0}\n"
+            f"💰 Umumiy daromad: {total_earnings[0] if total_earnings[0] else 0} so'm\n\n"
+            f"🚗 Mashina: {driver['car_model']} ({driver['car_number']})"
+        )
+
+        await message.answer(stats_text, parse_mode="Markdown", reply_markup=get_main_keyboard())
+
+    # Ortga qaytish handleri
+    @dp.message(F.text == "🔙 Ortga")
+    async def go_back(message: types.Message, state: FSMContext):
+        current_state = await state.get_state()
+
+        if current_state is not None:
+            await state.clear()
+            await message.answer("Bosh menyu", reply_markup=get_main_keyboard())
+        else:
+            await message.answer("Bosh menyu", reply_markup=get_main_keyboard())
 
 # --- ADMIN UCHUN ---
 

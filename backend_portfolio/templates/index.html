@@ -1,0 +1,65 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ozoda Portfolio</title>
+    <!-- CSS faylini ulaymiz -->
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navbar -->
+    <header class="navbar">
+        <h1>Ozoda</h1>
+        <nav>
+            <a href="#about">About</a>
+            <a href="#projects">Projects</a>
+            <a href="#contact">Contact</a>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section id="hero">
+        <h2>Salom! Men Ozoda</h2>
+        <p>Web developer va Django enthusiast</p>
+    </section>
+
+    <!-- About Section -->
+    <section id="about">
+        <h2>About Me</h2>
+        <p>Men zamonaviy web dasturlash bilan shug‘ullanaman va portfoli loyihalar yarataman.</p>
+    </section>
+
+    <!-- Projects Section -->
+    <section id="projects">
+        <h2>My Projects</h2>
+        <div class="project-cards">
+            <div class="card">
+                <h3>Project 1</h3>
+                <p>Django + React web app</p>
+            </div>
+            <div class="card">
+                <h3>Project 2</h3>
+                <p>Portfolio website</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section id="contact">
+        <h2>Contact</h2>
+        <p>Email: example@email.com</p>
+        <p>Phone: +998 90 123 45 67</p>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; 2026 Ozoda Portfolio</p>
+    </footer>
+
+    <!-- JS faylini ulaymiz -->
+    <script src="{% static 'js/main.js' %}"></script>
+</body>
+</html>
